@@ -88,7 +88,7 @@ pub fn test_main() {
     }
 
     serial_println!("Test Summary: {} passed, {} failed", passed, failed);
-    exit_qemu(QemuExitCode::Success);
+    // exit_qemu(QemuExitCode::Success);
 }
 
 pub fn test_panic_handler(info: &PanicInfo) -> ! {

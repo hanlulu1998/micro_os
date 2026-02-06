@@ -20,3 +20,9 @@ pub fn enable_write_protect_bit() {
     let value = read_cr0();
     write_cr0(value | WRITE_PROTECT);
 }
+
+pub fn software_interrupt<const N: u8>() {
+    unsafe {
+        core::arch::asm!("int {}", const N, options(nomem, nostack));
+    }
+}

@@ -1,12 +1,12 @@
 #![no_std]
 #![allow(dead_code)]
+mod interrupts;
 mod io_port;
 mod memory;
 mod multiboot_info;
 mod serial;
 mod utils;
 mod vga_buffer;
-mod interrupts;
 extern crate alloc;
 
 #[cfg(feature = "use_test")]
@@ -20,13 +20,10 @@ use utils::test_frameworks::*;
 #[cfg(feature = "use_test")]
 use crate::test::{test_allocator::*, test_exceptions::*};
 
-
-
 #[unsafe(naked)]
 extern "C" fn naked_function_example() {
     core::arch::naked_asm!("mov rax, 0x42", "ret");
 }
-
 
 #[cfg(feature = "use_test")]
 #[unsafe(no_mangle)]
@@ -42,6 +39,7 @@ pub extern "C" fn rust_main(multiboot_information_address: usize) -> ! {
     // naked_function_example();
 
     test_main();
+    println!("It did not crash!");
     loop {}
 }
 
@@ -84,6 +82,10 @@ fn panic(info: &PanicInfo) -> ! {
 
 // #[cfg(feature = "use_test")]
 // test_case!(invalid_opcode);
+#[cfg(feature = "use_test")]
+test_case!(breakpoint);
 
 #[cfg(feature = "use_test")]
 test_case!(page_fault);
+
+
