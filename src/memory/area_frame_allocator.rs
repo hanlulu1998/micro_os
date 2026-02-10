@@ -1,6 +1,6 @@
 use core::panic;
 
-use crate::multiboot_info::{MultibootAddressSection, MultibootMemMapEntry};
+use crate::multiboot_info::{MultibootAddressSection, MultibootInfo, MultibootMemMapEntry};
 
 use super::{Frame, FrameAllocator};
 
@@ -121,6 +121,18 @@ impl<'a> AreaFrameAllocator<'a> {
             multiboot_address_sections.multiboot_start,
             multiboot_address_sections.multiboot_end,
             memory_areas,
+        )
+    }
+
+    pub fn from_multiboot_info(boot_info: &'a MultibootInfo) -> Self {
+        let address_sections = boot_info.get_multiboot_address_section();
+        let memory_entries = boot_info.get_memory_entries();
+        AreaFrameAllocator::<'a>::new(
+            address_sections.kernel_start,
+            address_sections.kernel_end,
+            address_sections.multiboot_start,
+            address_sections.multiboot_end,
+            memory_entries,
         )
     }
 }

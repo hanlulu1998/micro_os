@@ -6,6 +6,7 @@ use crate::utils::x86_64_control::{
 pub mod cr0;
 pub mod cr2;
 pub mod cr3;
+pub mod gdt;
 pub mod msr;
 pub mod segmentation;
 pub mod tlb;

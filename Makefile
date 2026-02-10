@@ -55,7 +55,7 @@ $(kernel): $(rust_os) $(assembly_object_files) $(linker_script)
 	ld -n -T $(linker_script) -o $(kernel) $(assembly_object_files) $(rust_os)
 
 $(rust_os): $(rust_source_files) $(rust_config_file) $(rust_target_file)
-	cargo build -Z json-target-spec
+	cargo build
 	mv $(rust_lib) $(rust_os)
 
 test: $(test_iso)
@@ -83,7 +83,7 @@ $(test_kernel): $(test_rust_os) $(assembly_object_files) $(linker_script)
 	ld -n -T $(linker_script) -o $(test_kernel) $(assembly_object_files) $(test_rust_os)
 
 $(test_rust_os): $(rust_source_files) $(rust_config_file) $(rust_target_file)
-	cargo build --features use_test -Z json-target-spec
+	cargo build --features use_test
 	mv $(rust_lib) $(test_rust_os)
 
 # compile assembly files

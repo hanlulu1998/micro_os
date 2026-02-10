@@ -32,13 +32,22 @@ pub extern "C" fn rust_main(multiboot_information_address: usize) -> ! {
     // test_paging(multiboot_information_address);
     // test_remap_the_kernel(multiboot_information_address);
 
-    memory::init(multiboot_information_address);
+    let boot_info = crate::multiboot_info::MultibootInfo::new(multiboot_information_address);
 
-    interrupts::init();
+    let mut memory_controller = memory::init(&boot_info);
+
+    interrupts::init(&mut memory_controller);
 
     // naked_function_example();
 
-    test_main();
+    // test_main();
+
+    fn stack_overflow() {
+        stack_overflow();
+    }
+
+    stack_overflow();
+
     println!("It did not crash!");
     loop {}
 }
@@ -46,12 +55,6 @@ pub extern "C" fn rust_main(multiboot_information_address: usize) -> ! {
 #[cfg(not(feature = "use_test"))]
 #[unsafe(no_mangle)]
 pub extern "C" fn rust_main(multiboot_information_address: usize) -> ! {
-    use crate::{
-        memory::{FrameAllocator, area_frame_allocator::AreaFrameAllocator},
-        multiboot_info::{MultibootElfSymbolsTag, MultibootInfo, MultibootTagType},
-    };
-    memory::init(multiboot_information_address);
-
     loop {}
 }
 
@@ -87,5 +90,3 @@ test_case!(breakpoint);
 
 #[cfg(feature = "use_test")]
 test_case!(page_fault);
-
-

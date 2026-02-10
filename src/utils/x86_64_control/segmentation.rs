@@ -1,5 +1,7 @@
 use core::arch::asm;
 
+use crate::memory::paging::VirtualAddress;
+
 pub mod segment_register {
 
     use crate::utils::x86_64_control::segmentation::SegmentSelector;
@@ -86,6 +88,11 @@ impl SegmentSelector {
     }
 
     #[inline]
+    pub const fn zero() -> SegmentSelector {
+        SegmentSelector(0)
+    }
+
+    #[inline]
     pub fn index(self) -> u16 {
         (self.0 >> 3) & 0x1FFF
     }
@@ -112,5 +119,55 @@ pub struct Dtr {
 pub unsafe fn lidt(idt: &Dtr) {
     unsafe {
         asm!("lidt [{}]", in(reg) idt, options(readonly, nostack, preserves_flags));
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+#[repr(C, packed(4))]
+pub struct TaskStateSegment {
+    reserved_1: u32,
+    pub privilege_stack_table: [VirtualAddress; 3],
+    reserved_2: u64,
+    pub interrupt_stack_table: [VirtualAddress; 7],
+    reserved_3: u64,
+    reserved_4: u16,
+    pub iomap_base: u16,
+}
+
+impl TaskStateSegment {
+    #[inline]
+    pub const fn new() -> TaskStateSegment {
+        TaskStateSegment {
+            privilege_stack_table: [0; 3],
+            interrupt_stack_table: [0; 7],
+            iomap_base: size_of::<TaskStateSegment>() as u16,
+            reserved_1: 0,
+            reserved_2: 0,
+            reserved_3: 0,
+            reserved_4: 0,
+        }
+    }
+}
+
+#[inline]
+pub unsafe fn set_cs(sel: SegmentSelector) {
+    unsafe {
+        asm!(
+            "push {sel}",
+            "lea {tmp}, [55f + rip]",
+            "push {tmp}",
+            "retfq",
+            "55:",
+            sel = in(reg) u64::from(sel.0),
+            tmp = lateout(reg) _,
+            options(preserves_flags),
+        );
+    }
+}
+
+#[inline]
+pub unsafe fn load_tss(sel: SegmentSelector) {
+    unsafe {
+        asm!("ltr {0:x}", in(reg) sel.0, options(nostack, preserves_flags));
     }
 }

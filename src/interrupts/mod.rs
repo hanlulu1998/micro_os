@@ -1,8 +1,16 @@
 use core::arch::naked_asm;
 
-use spin::Lazy;
+use spin::{Lazy, Once};
 
-use crate::{println, utils::x86_64_control};
+use crate::{
+    memory::MemoryController,
+    println,
+    utils::x86_64_control::{
+        self,
+        gdt::{Descriptor, Gdt},
+        segmentation::{SegmentSelector, TaskStateSegment, load_tss, set_cs},
+    },
+};
 
 mod idt;
 
@@ -95,11 +103,39 @@ static IDT: Lazy<idt::Idt> = Lazy::new(|| {
     idt.set_handler(3, handler!(breakpoint_handler)); // new
     idt.set_handler(6, handler!(invalid_opcode_handler));
     idt.set_handler(8, handler_with_error_code!(double_fault_handler));
+    idt.set_stack_index(8, DOUBLE_FAULT_IST_INDEX as u16);
     // idt.set_handler(14, handler_with_error_code!(page_fault_handler));
     idt
 });
 
-pub fn init() {
+static TSS: Once<TaskStateSegment> = Once::new();
+static GDT: Once<Gdt> = Once::new();
+
+const DOUBLE_FAULT_IST_INDEX: usize = 1;
+pub fn init(memory_controller: &mut MemoryController) {
+    let double_fault_stack = memory_controller
+        .alloc_stack(1)
+        .expect("could not allocate double fault stack");
+
+    let tss = TSS.call_once(|| {
+        let mut tss = TaskStateSegment::new();
+        tss.interrupt_stack_table[DOUBLE_FAULT_IST_INDEX] = double_fault_stack.top();
+        tss
+    });
+    let mut code_selector = SegmentSelector::zero();
+    let mut tss_selector = SegmentSelector::zero();
+    let gdt = GDT.call_once(|| {
+        let mut gdt = Gdt::new();
+        code_selector = gdt.add_entry(Descriptor::kernel_code_segment());
+        tss_selector = gdt.add_entry(Descriptor::tss_segment(&tss));
+        gdt
+    });
+    gdt.load();
+    unsafe {
+        set_cs(code_selector);
+        load_tss(tss_selector);
+    }
+
     IDT.load();
 }
 
@@ -160,7 +196,19 @@ extern "C" fn breakpoint_handler(stack_frame: *const ExceptionStackFrame) {
     );
 }
 
-extern "C" fn double_fault_handler(stack_frame: *const ExceptionStackFrame, error_code: u64) {
-    println!("\nEXCEPTION: DOUBLE FAULT\n{:#?}", unsafe { &*stack_frame });
+extern "C" fn double_fault_handler(stack_frame: *const ExceptionStackFrame, _error_code: u64) {
+    let stack_frame = unsafe { &*stack_frame };
+    println!("\nEXCEPTION: DOUBLE FAULT");
+    println!("ExceptionStackFrame {{");
+    println!(
+        "    instruction_pointer: {},",
+        stack_frame.instruction_pointer
+    );
+    println!("    code_segment: {},", stack_frame.code_segment);
+    println!("    cpu_flags: {},", stack_frame.cpu_flags);
+    println!("    stack_pointer: {},", stack_frame.stack_pointer);
+    println!("    stack_segment: {},", stack_frame.stack_segment);
+    println!("}}");
+
     loop {}
 }

@@ -17,6 +17,12 @@ impl Idt {
         &mut self.0[entry as usize].options
     }
 
+    pub fn set_stack_index(&mut self, entry: u8, index: u16) {
+        self.0[entry as usize]
+            .options
+            .set_ist_bits(index as u8 & 0b111);
+    }
+
     pub fn list(&self, index: usize) -> &Entry {
         &self.0[index]
     }
@@ -65,6 +71,10 @@ impl Entry {
             reserved: 0,
         }
     }
+
+    pub fn options(&self) -> EntryOptions {
+        self.options
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -85,6 +95,20 @@ impl EntryOptions {
             self.0 &= !(1 << 15);
         }
         self
+    }
+
+    pub fn set_ist_bits(&mut self, index: u8) {
+        // 清零 bit 0–2
+        self.0 &= !(0b111 << 0);
+        // 设置新值（只取低 3 位）
+        self.0 |= ((index as u16) & 0b111) << 0;
+    }
+
+    pub fn set_gate_type(&mut self, ty: u8) {
+        // 先清零 bit 8–11（4 位）
+        self.0 &= !(0b1111 << 8);
+        // 再设置新的类型值（只取低 4 位）
+        self.0 |= ((ty as u16) & 0b1111) << 8;
     }
 
     pub fn set_privilege_level(&mut self, dpl: u16) -> &mut Self {
