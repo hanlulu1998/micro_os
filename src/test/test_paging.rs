@@ -40,7 +40,6 @@ pub fn test_paging(multiboot_information_address: usize) {
     serial_println!("None = {:?}", page_table.translate(addr));
 }
 
-
 pub fn test_remap_the_kernel(multiboot_information_address: usize) {
     use crate::{memory::paging::remap_the_kernel, println, utils::x86_64_control};
 

@@ -3,7 +3,7 @@ pub mod mapper;
 pub mod table;
 pub mod temporary_page;
 
-use core::ops::{Deref, DerefMut};
+use core::ops::{Add, Deref, DerefMut};
 
 pub use self::entry::*;
 use crate::{
@@ -16,7 +16,8 @@ use crate::{
         },
     },
     multiboot_info::MultibootInfo,
-    println, utils::x86_64_control::{cr3, tlb},
+    println,
+    utils::x86_64_control::{cr3, tlb},
 };
 
 const ENTRY_COUNT: usize = 512;
@@ -27,6 +28,15 @@ pub type VirtualAddress = usize;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Page {
     number: usize,
+}
+
+impl Add<usize> for Page {
+    type Output = Page;
+    fn add(self, rhs: usize) -> Self::Output {
+        Page {
+            number: self.number + rhs,
+        }
+    }
 }
 
 impl Page {
@@ -69,6 +79,7 @@ impl Page {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct PageIter {
     start: Page,
     end: Page,
@@ -85,6 +96,18 @@ impl Iterator for PageIter {
         } else {
             None
         }
+    }
+
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        let target = self.start.number.checked_add(n)?;
+        if target > self.end.number {
+            self.start.number = self.end.number + 1;
+            return None;
+        }
+
+        let result = Page { number: target };
+        self.start.number = target + 1;
+        Some(result)
     }
 }
 

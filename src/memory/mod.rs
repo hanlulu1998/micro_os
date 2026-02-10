@@ -5,11 +5,14 @@ use crate::{
         area_frame_allocator::AreaFrameAllocator,
         paging::{EntryFlags, Page, PhysicalAddress},
     },
+    multiboot_info::MultibootInfo,
 };
 
 pub mod allocator;
 pub mod area_frame_allocator;
 pub mod paging;
+pub mod stack_allocator;
+
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Frame {
     number: usize,
@@ -59,6 +62,18 @@ impl Iterator for FrameIter {
             None
         }
     }
+
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        let target = self.start.number.checked_add(n)?;
+        if target > self.end.number {
+            self.start.number = self.end.number + 1;
+            return None;
+        }
+
+        let result = Frame { number: target };
+        self.start.number = target + 1;
+        Some(result)
+    }
 }
 
 pub trait FrameAllocator {
@@ -66,22 +81,16 @@ pub trait FrameAllocator {
     fn deallocate_frame(&mut self, frame: Frame);
 }
 
-pub fn init(multiboot_information_address: usize) {
+pub fn init<'a>(boot_info: &'a MultibootInfo) -> MemoryController<'a> {
     assert_has_not_been_called!("memory::init must be called only once");
 
     use crate::{memory::paging::remap_the_kernel, utils::x86_64_control};
 
-    let boot_info = crate::multiboot_info::MultibootInfo::new(multiboot_information_address);
-
-    let address_sections = boot_info.get_multiboot_address_section();
-
-    let memory_entries = boot_info.get_memory_entries();
-    let mut frame_allocator =
-        AreaFrameAllocator::from_multiboot_address_sections(&address_sections, memory_entries);
+    let mut frame_allocator = AreaFrameAllocator::from_multiboot_info(boot_info);
 
     x86_64_control::enable_nxe_bit();
     x86_64_control::enable_write_protect_bit();
-    let mut active_table = remap_the_kernel(&mut frame_allocator, &boot_info);
+    let mut active_table = remap_the_kernel(&mut frame_allocator, boot_info);
 
     // Initialize the heap
     let heap_start_page = Page::containing_address(HEAP_START);
@@ -94,5 +103,37 @@ pub fn init(multiboot_information_address: usize) {
     // Initialize the heap allocator
     unsafe {
         HEAP_ALLOCATOR.lock().init(HEAP_START, HEAP_SIZE);
+    };
+
+    let stack_allocator = {
+        let stack_alloc_start = heap_end_page + 1;
+        let stack_alloc_end = stack_alloc_start + 100;
+        let stack_alloc_range = Page::range_inclusive(stack_alloc_start, stack_alloc_end);
+        stack_allocator::StackAllocator::new(stack_alloc_range)
+    };
+
+    MemoryController {
+        active_table: active_table,
+        frame_allocator: frame_allocator,
+        stack_allocator: stack_allocator,
+    }
+}
+
+pub use self::stack_allocator::Stack;
+
+pub struct MemoryController<'a> {
+    active_table: paging::ActivePageTable,
+    frame_allocator: area_frame_allocator::AreaFrameAllocator<'a>,
+    stack_allocator: stack_allocator::StackAllocator,
+}
+
+impl<'a> MemoryController<'a> {
+    pub fn alloc_stack(&mut self, size_in_pages: usize) -> Option<Stack> {
+        let &mut MemoryController {
+            ref mut active_table,
+            ref mut frame_allocator,
+            ref mut stack_allocator,
+        } = self;
+        stack_allocator.alloc_stack(active_table, frame_allocator, size_in_pages)
     }
 }
